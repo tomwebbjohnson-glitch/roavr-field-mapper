@@ -36,7 +36,7 @@ body{display:flex;flex-direction:column}
 .pages{flex:1;position:relative;overflow:hidden;min-height:0;display:flex;flex-direction:column}
 .page{position:absolute;inset:0;display:flex;flex-direction:column;transition:transform .3s cubic-bezier(0.4,0,0.2,1),opacity .3s}
 .page.hidden{transform:translateX(100%);opacity:0;pointer-events:none}
-.map-wrapper{flex:1;position:relative;overflow:hidden}
+.map-wrapper{flex:1;position:relative;overflow:hidden;background:var(--bg)}
 
 /* ── MAP ── */
 #map{position:absolute;top:0;left:0;right:0;bottom:0}
@@ -308,27 +308,38 @@ let records=[],selFeat=null,pickMode='gps',pending=null,curTab='map',curGroup='s
 let map,streetL,satL,gpsMarker,markers=[];
 let curLat=51.8842,curLng=-1.0820,gpsReady=false,watchId=null;
 
-function initMap(){
-  // Force the map div to fill its wrapper before Leaflet measures it
+function sizeMap(){
+  // Calculate available height: total window minus nav, controls bar, place strip, tabbar
+  const nav = document.querySelector('.nav');
+  const ctrlBar = document.querySelector('#pg-map > div:first-child');
+  const placeStrip = document.querySelector('.place-strip');
+  const tabbar = document.querySelector('.tabbar');
+  const screen = document.querySelector('.screen');
+  const usedH = (nav ? nav.offsetHeight : 52)
+              + (ctrlBar ? ctrlBar.offsetHeight : 44)
+              + (placeStrip ? placeStrip.offsetHeight : 72)
+              + (tabbar ? tabbar.offsetHeight : 70);
+  const availH = window.innerHeight - usedH;
   const wrapper = document.getElementById('mapWrapper');
   const mapEl = document.getElementById('map');
-  mapEl.style.position = 'absolute';
-  mapEl.style.top = '0'; mapEl.style.left = '0';
-  mapEl.style.width = wrapper.offsetWidth + 'px';
-  mapEl.style.height = wrapper.offsetHeight + 'px';
+  const w = window.innerWidth;
+  const h = Math.max(availH, 200);
+  wrapper.style.height = h + 'px';
+  mapEl.style.width = w + 'px';
+  mapEl.style.height = h + 'px';
+  return {w, h};
+}
+
+function initMap(){
+  const {w, h} = sizeMap();
   map=L.map('map',{center:[curLat,curLng],zoom:5,zoomControl:false,attributionControl:false});
   streetL=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
   satL=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
   streetL.addTo(map);
   gpsMarker=L.marker([curLat,curLng],{icon:L.divIcon({html:'<div class="gps-dot"></div>',className:'',iconSize:[13,13],iconAnchor:[6,6]})}).addTo(map);
-  setTimeout(()=>{
-    const wrapper = document.getElementById('mapWrapper');
-    const mapEl = document.getElementById('map');
-    mapEl.style.width = wrapper.offsetWidth + 'px';
-    mapEl.style.height = wrapper.offsetHeight + 'px';
-    map.invalidateSize(true);
-  }, 200);
-  setTimeout(()=>map.invalidateSize(true), 600);
+  setTimeout(()=>{ sizeMap(); map.invalidateSize(true); }, 300);
+  setTimeout(()=>{ sizeMap(); map.invalidateSize(true); }, 800);
+  window.addEventListener('resize', ()=>{ sizeMap(); map.invalidateSize(true); });
   startGPS();
 }
 
@@ -386,7 +397,7 @@ function setBasemap(m){
   document.getElementById('pg-picker').classList.add('hidden');
   curTab=t;
   if(t==='records')renderRecords();
-  if(t==='map')setTimeout(()=>map.invalidateSize(),10);
+  if(t==='map')setTimeout(()=>{sizeMap();map.invalidateSize(true);},50);
 }
 
 function openPicker(mode){
@@ -407,7 +418,7 @@ function closePicker(){
   document.getElementById('pg-picker').classList.add('hidden');
   document.getElementById('pg-map').classList.remove('hidden');
   document.getElementById('tb-map').classList.add('on');
-  setTimeout(()=>map.invalidateSize(),10);
+  setTimeout(()=>{if(map){sizeMap();map.invalidateSize(true);}},50);
 }
 
 function buildGroupTabs(){
@@ -440,7 +451,7 @@ function confirmPlace(){
     document.getElementById('pg-map').classList.remove('hidden');
     document.getElementById('tapOverlay').classList.add('on');
     document.getElementById('tb-map').classList.add('on');
-    setTimeout(()=>map.invalidateSize(),10);
+    setTimeout(()=>{if(map){sizeMap();map.invalidateSize(true);}},50);
     toast('info','Tap map to place: '+selFeat);
   } else {
     addRecord(selFeat,note,curLat,curLng);
