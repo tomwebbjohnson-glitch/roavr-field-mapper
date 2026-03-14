@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ROAVR Field">
+<meta name="theme-color" content="#0a0e0b">
+<title>ROAVR Field Mapper</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#0a0e0b;--surface:#111815;--surface2:#182220;--surface3:#1e2c28;--border:#253430;--accent:#4ade80;--accent2:#22c55e;--accent-dim:rgba(74,222,128,0.12);--accent-glow:rgba(74,222,128,0.35);--text:#e2f0e0;--text2:#7a9e8e;--text3:#456055;--red:#f87171;--blue:#60a5fa;--font:'DM Sans',sans-serif;--mono:'DM Mono',monospace}
+/* Map fills entire window — same as bare test that worked */
+html,body{width:100%;height:100%;background:var(--bg)}body{position:fixed;inset:0;overflow:hidden}
+#map{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+/* All chrome is fixed on top */
+#nav{position:fixed;top:0;left:0;right:0;display:flex;align-items:flex-end;justify-content:space-between;padding:env(safe-area-inset-top,0px) 16px 10px 16px;min-height:calc(52px + env(safe-area-inset-top,0px));background:var(--bg);border-bottom:1px solid var(--border);z-index:100;font-family:var(--font)}
+.b1{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--accent2);text-transform:uppercase;display:block}
+.b2{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-0.4px}
+.icon-btn{width:34px;height:34px;border-radius:11px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:all .15s}
+.icon-btn:active{transform:scale(0.9)}
+#ctrl{position:fixed;top:calc(52px + env(safe-area-inset-top,0px));left:0;right:0;height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:8px;background:var(--bg);border-bottom:1px solid var(--border);z-index:100;font-family:var(--font)}
+.chip{display:flex;align-items:center;gap:6px;padding:5px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;cursor:pointer}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent-glow)}
+.chip .num{font-size:13px;font-weight:700;color:var(--accent);font-family:var(--mono)}
+.chip .lbl{font-size:11px;color:var(--text2)}
+.bmt{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:20px;overflow:hidden}
+.bmb{padding:5px 13px;font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .15s}
+.bmb.on{background:var(--accent-dim);color:var(--accent)}
+.bms{width:1px;background:var(--border)}
+.gpsbtn{width:32px;height:32px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;flex-shrink:0;transition:all .15s}
+.gpsbtn:active{transform:scale(0.9)}
+.gpsbtn.on{background:var(--accent-dim);border-color:var(--accent)}
+#strip{position:fixed;bottom:calc(56px + env(safe-area-inset-bottom,0px));left:0;right:0;display:flex;gap:8px;padding:8px 14px 10px;background:var(--bg);border-top:1px solid var(--border);z-index:100;font-family:var(--font)}
+.pbtn{flex:1;height:48px;border-radius:16px;border:none;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s}
+.pbtn:active{transform:scale(0.96)}
+.pgps{background:var(--accent);color:#061a0e}
+.pmap{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+#tabs{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:flex-start;padding:8px 0 0 0;padding-bottom:env(safe-area-inset-bottom,0px);min-height:calc(56px + env(safe-area-inset-bottom,0px));background:var(--bg);border-top:1px solid var(--border);z-index:100;font-family:var(--font)}
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;transition:all .15s}
+.tb:active{transform:scale(0.92)}
+.tbi{font-size:22px;line-height:1;filter:grayscale(1);opacity:.3;transition:all .2s}
+.tbl{font-size:10px;font-weight:600;color:var(--text3);transition:all .2s}
+.tb.on .tbi{filter:none;opacity:1}
+.tb.on .tbl{color:var(--accent)}
+#tapov{position:fixed;top:calc(98px + env(safe-area-inset-top,0px));left:0;right:0;bottom:calc(122px + env(safe-area-inset-bottom,0px));z-index:50;display:none;pointer-events:none}
+#tapov.on{display:flex;align-items:center;justify-content:center}
+/* Crosshair sits in centre — purely decorative, no pointer events */
+.xhair{width:40px;height:40px;position:relative;pointer-events:none}
+.xhair::before{content:'';position:absolute;left:50%;top:0;width:2px;height:100%;background:var(--accent);transform:translateX(-50%)}
+.xhair::after{content:'';position:absolute;top:50%;left:0;height:2px;width:100%;background:var(--accent);transform:translateY(-50%)}
+.xring{position:absolute;inset:-10px;border:2px solid var(--accent);border-radius:50%;opacity:0.5}
+/* Confirm bar at bottom of map area */
+#confirmbar{position:fixed;bottom:calc(122px + env(safe-area-inset-bottom,0px));left:0;right:0;display:none;gap:10px;padding:8px 14px;z-index:51}
+#confirmbar.on{display:flex}
+.conf-btn{flex:1;height:46px;border-radius:14px;border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.conf-btn:active{transform:scale(0.97)}
+.conf-ok{background:var(--accent);color:#061a0e}
+.conf-cancel{background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.35);color:var(--red)}
+/* Panels slide up from bottom over everything */
+.panel{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--surface);z-index:200;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .32s cubic-bezier(0.16,1,0.3,1);font-family:var(--font)}
+.panel.open{transform:translateY(0)}
+.phdr{flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--border)}
+.phdr h2{font-size:19px;font-weight:700;color:var(--text);letter-spacing:-0.5px}
+.pbadge{display:inline-flex;align-items:center;gap:5px;margin-top:4px;padding:4px 10px;border-radius:9px;font-size:12px;font-weight:600}
+.pg{background:rgba(74,222,128,0.1);color:var(--accent);border:1px solid rgba(74,222,128,0.25)}
+.pm{background:rgba(96,165,250,0.1);color:var(--blue);border:1px solid rgba(96,165,250,0.25)}
+.xbtn{width:30px;height:30px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--text2);flex-shrink:0}
+.xbtn:active{transform:scale(0.9)}
+.gtabs{flex-shrink:0;display:flex;gap:6px;padding:10px 14px;overflow-x:auto;scrollbar-width:none}
+.gtabs::-webkit-scrollbar{display:none}
+.gtab{flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2);border:1px solid var(--border);cursor:pointer;white-space:nowrap;transition:all .15s}
+.gtab.on{background:var(--accent-dim);color:var(--accent);border-color:rgba(74,222,128,0.3)}
+.fscroll{flex:1;overflow-y:auto;padding:0 14px 8px;scrollbar-width:none;min-height:0}
+.fscroll::-webkit-scrollbar{display:none}
+.fsec{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text3);text-transform:uppercase;padding:12px 2px 6px}
+.frow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:13px;cursor:pointer;border:1.5px solid transparent;margin-bottom:3px;background:var(--surface2);transition:all .12s}
+.frow:active{transform:scale(0.98)}
+.frow.sel{background:var(--accent-dim);border-color:rgba(74,222,128,0.4)}
+.fico{width:40px;height:40px;border-radius:11px;background:var(--surface3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;padding:4px}
+.fico svg{width:100%;height:100%}
+.fico span{font-size:20px}
+.flbl{flex:1;font-size:14px;font-weight:500;color:var(--text)}
+.fchk{width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;color:#061a0e;opacity:0;transition:opacity .12s;flex-shrink:0}
+.frow.sel .fchk{opacity:1}
+.pfoot{flex-shrink:0;padding:8px 14px 14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.nfield{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 13px;font-family:var(--font);font-size:13px;color:var(--text);outline:none;resize:none;height:50px;width:100%}
+.nfield::placeholder{color:var(--text3)}
+.nfield:focus{border-color:var(--accent)}
+.cbtn{width:100%;height:50px;border-radius:16px;border:none;background:var(--accent);color:#061a0e;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;transition:all .15s}
+.cbtn:active{transform:scale(0.97)}
+.cbtn:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed}
+.photo-btn{flex-shrink:0;padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.photo-btn:active{transform:scale(0.95);background:var(--surface3)}
+.rhdr{flex-shrink:0;display:flex;align-items:flex-end;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--border)}
+.rhdr h2{font-size:19px;font-weight:700;color:var(--text)}
+.rhdr p{font-size:12px;color:var(--text2)}
+.sstrip{flex-shrink:0;display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.sstrip::-webkit-scrollbar{display:none}
+.sbox{flex-shrink:0;padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:12px;text-align:center;min-width:64px}
+.snum{font-size:20px;font-weight:700;color:var(--accent);font-family:var(--mono);line-height:1}
+.slbl{font-size:10px;color:var(--text2);margin-top:2px}
+.rbody{flex:1;overflow-y:auto;padding:0 14px 14px;scrollbar-width:none;min-height:0}
+.rbody::-webkit-scrollbar{display:none}
+.rsec{font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text3);text-transform:uppercase;padding:12px 2px 6px}
+.grow{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;margin-bottom:5px}
+.gdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.gname{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+.gbar{flex-shrink:0;width:52px;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.gfill{height:100%;border-radius:2px}
+.gcnt{font-size:15px;font-weight:700;color:var(--text);font-family:var(--mono)}
+.ritem{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;margin-bottom:5px}
+.rico{width:36px;height:36px;border-radius:10px;background:var(--surface3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;padding:4px}
+.rico svg{width:100%;height:100%}
+.rico span{font-size:17px}
+.rinfo{flex:1;min-width:0}
+.rname{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmeta{font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:1px}
+.rnote{font-size:11px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbtn{width:28px;height:28px;border-radius:9px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);color:var(--red);font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.dbtn:active{transform:scale(0.86)}
+.estrip{flex-shrink:0;padding:8px 14px 14px;border-top:1px solid var(--border)}
+.ebtn{width:100%;height:48px;border-radius:16px;border:none;background:linear-gradient(135deg,#14532d,#22c55e);color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s}
+.ebtn:active{transform:scale(0.97)}
+.ebtn:disabled{background:var(--surface2);color:var(--text3)}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:10px;opacity:.4}
+.empi{font-size:42px}
+.empt{font-size:14px;color:var(--text2)}
+#toast{position:fixed;top:8px;left:50%;transform:translateX(-50%) translateY(-12px);background:var(--surface2);border:1px solid var(--border);border-radius:22px;padding:8px 16px;font-size:12px;font-weight:600;color:var(--text);z-index:400;opacity:0;transition:all .28s cubic-bezier(0.34,1.56,0.64,1);white-space:nowrap;pointer-events:none;display:flex;align-items:center;gap:7px;font-family:var(--font)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok .ti{color:var(--accent)}
+#toast.info .ti{color:var(--blue)}
+
+/* Photo capture */
+#photo-bar{position:fixed;bottom:calc(56px + env(safe-area-inset-bottom,0px));left:0;right:0;display:none;align-items:center;gap:8px;padding:6px 14px;background:var(--bg);border-top:1px solid var(--border);z-index:102}
+#photo-bar.on{display:flex}
+#photo-preview{width:52px;height:52px;border-radius:10px;object-fit:cover;border:2px solid var(--accent);flex-shrink:0;display:none}
+#photo-preview.on{display:block}
+.cam-btn{flex:1;height:42px;border-radius:13px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.cam-btn:active{transform:scale(0.96)}
+.cam-btn.taken{background:var(--accent-dim);border-color:rgba(74,222,128,0.4);color:var(--accent)}
+#photo-input{display:none}
+
+.leaflet-control-attribution,.leaflet-control-zoom{display:none!important}
+.epin{width:34px;height:34px;border-radius:50%;background:#fff;border:2.5px solid #22c55e;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);overflow:hidden;padding:4px}
+.epin svg{width:100%;height:100%}
+.epin span{font-size:17px}
+@keyframes pp{0%{transform:scale(.2);opacity:0}70%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
+.pp{animation:pp .35s cubic-bezier(0.34,1.56,0.64,1)}
+.gd{width:13px;height:13px;background:#60a5fa;border-radius:50%;border:2px solid #fff;position:relative}
+.gd::after{content:'';position:absolute;inset:-5px;border-radius:50%;background:rgba(96,165,250,0.25);animation:gr 2s ease-out infinite}
+@keyframes gr{0%{transform:scale(1);opacity:.7}100%{transform:scale(3.5);opacity:0}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="nav"><div class="nav-brand"><span class="b1">ROAVR</span><span class="b2">Field Mapper</span></div><div class="icon-btn" onclick="doExport()">⬆</div></div>
+<div id="ctrl"><div class="chip" onclick="openRec()"><div class="dot"></div><span class="num" id="cnt">0</span><span class="lbl">placed</span></div><div class="bmt"><div class="bmb on" id="bms" onclick="setBM('s')">Map</div><div class="bms"></div><div class="bmb" id="bmsat" onclick="setBM('sat')">Satellite</div></div><div class="gpsbtn" id="gpsbtn" onclick="panGPS()">📍</div></div>
+<div id="strip"><button class="pbtn pgps" onclick="openPicker('gps')">📍 Place Here</button><button class="pbtn pmap" onclick="openPicker('map')">✚ Place on Map</button></div>
+<div id="tabs"><div class="tb on" id="tbm" onclick="showMap()"><span class="tbi">🗺</span><span class="tbl">Map</span></div><div class="tb" id="tbr" onclick="openRec()"><span class="tbi">📋</span><span class="tbl">Records</span></div></div>
+<div id="tapov"><div class="xhair"><div class="xring"></div></div></div>
+
+<div id="confirmbar">
+  <button class="conf-btn conf-cancel" onclick="cancelTap()">✕ Cancel</button>
+  <button class="conf-btn conf-ok" onclick="confirmTap()">📍 Place Here</button>
+</div>
+<div class="panel" id="ppanel"><div class="phdr"><div><h2>Select Feature</h2><div class="pbadge" id="pbadge"></div></div><div class="xbtn" onclick="closeP()">✕</div></div><div class="gtabs" id="gtabs"></div><div class="fscroll" id="fscroll"></div><div class="pfoot">
+  <textarea class="nfield" id="note" placeholder="Optional note — species, count, behaviour…"></textarea>
+  <div style="display:flex;align-items:center;gap:8px">
+    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="onPhotoChosen(event)">
+    <button class="cam-btn" id="cam-btn" onclick="document.getElementById('photo-input').click()" style="flex:1;height:40px">📷 Add Photo</button>
+    <img id="photo-preview" src="" style="display:none;width:40px;height:40px;border-radius:8px;object-fit:cover;border:2px solid var(--accent);flex-shrink:0">
+  </div>
+  <button class="cbtn" id="cbtn" onclick="confirm2()" disabled>Select a feature above</button>
+</div></div>
+<div class="panel" id="rpanel"><div class="rhdr"><div><h2>Survey Records</h2><p id="rsub">Nothing recorded yet</p></div><div class="xbtn" onclick="closeR()">✕</div></div><div class="sstrip" id="sstrip"></div><div class="rbody" id="rbody"></div><div class="estrip"><button class="ebtn" id="ebtn" onclick="doExport()" disabled>⬆ Export GeoJSON</button></div></div>
+<div id="toast"><span class="ti"></span><span id="tmsg"></span></div>
+<script>
+const GS=[
+  {id:'species',label:'🐾 Species',color:'#a78bfa',groups:[
+    {name:'Bats',items:['PRF','Roost Entry / Exit Point']},
+    {name:'Birds',items:['Bird Nest (Active)','Bird Nest (Inactive)','Bird Pellets']},
+    {name:'Mammals',items:['Badger','Deer','Fox','Hedgehog','Squirrel']},
+    {name:'Amphibians',items:['Amphibian Eggs']},
+    {name:'Invertebrates',items:['Stag Beetle']}]},
+  {id:'signs',label:'🔍 Signs',color:'#fb923c',groups:[
+    {name:'Mammal Signs',items:['Badger Latrine','Deer Droppings','Fox Droppings']},
+    {name:'Structures',items:['Badger Sett','Otter Holt','Water Vole Burrow','Rabbit Burrow']}]},
+  {id:'existing',label:'🌳 Existing',color:'#34d399',groups:[
+    {name:'Water',items:['Water Body','GCN Pond','Kingfisher Bank']},
+    {name:'Vegetation',items:['Veteran Tree','Tree Stump','Dead Wood','Log Pile','Brash Pile']},
+    {name:'Reptiles',items:['Herptile Refuge','Reptile Hibernaculum']},
+    {name:'Built',items:['Green Roof']}]},
+  {id:'bat',label:'🦇 Bat Survey',color:'#818cf8',groups:[
+    {name:'Roost',items:['PRF','Roost Entry / Exit Point']},
+    {name:'Equipment',items:['Static Bat Detector','Bat Box']},
+    {name:'Survey',items:['Observer Station']}]},
+  {id:'enhance',label:'🏡 Enhancements',color:'#f472b6',groups:[
+    {name:'Bats',items:['Bat Box']},
+    {name:'Birds',items:['Bird Box','Swift Brick','Swift Box','Barn Owl Box','House Martin Cup']},
+    {name:'Invertebrates',items:['Bee Brick','Bee Bank','Insect Box','Stag Beetle Loggery']},
+    {name:'Mammals',items:['Wildlife Gap','Hedgehog House','Hedgehog Gap','Dormouse Box','Badger Gate']},
+    {name:'Reptiles',items:['Herptile Refuge','Reptile Hibernaculum']}]},
+  {id:'survey',label:'📋 Survey',color:'#94a3b8',groups:[
+    {name:'Site',items:['Building','Target Note','Observer Station']}]},
+  {id:'trees',label:'🌳 Trees',color:'#22c55e',groups:[
+    {name:'Urban Trees',items:['Small Urban Tree','Medium Urban Tree','Large Urban Tree']},
+    {name:'Rural Trees',items:['Small Rural Tree','Medium Rural Tree','Large Rural Tree']}]},
+];
+
+const SV={
+'Badger':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><ellipse cx="50" cy="65" rx="30" ry="18" fill="#888"/><ellipse cx="76" cy="58" rx="14" ry="12" fill="#888"/><ellipse cx="76" cy="58" rx="5" ry="12" fill="white"/><path d="M62 52 Q69 48 76 44 Q70 50 62 52Z" fill="#111"/><path d="M90 52 Q83 48 76 44 Q82 50 90 52Z" fill="#111"/><circle cx="68" cy="55" r="3" fill="#111"/><ellipse cx="88" cy="61" rx="4" ry="3" fill="#111"/><rect x="24" y="76" width="8" height="14" rx="3" fill="#777"/><rect x="36" y="78" width="8" height="12" rx="3" fill="#777"/><rect x="52" y="78" width="8" height="12" rx="3" fill="#777"/><rect x="64" y="76" width="8" height="14" rx="3" fill="#777"/></svg>',
+'Hedgehog':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><ellipse cx="48" cy="65" rx="34" ry="22" fill="#8B6340"/><line x1="22" y1="58" x2="12" y2="46" stroke="#5a3e10" stroke-width="2"/><line x1="28" y1="50" x2="22" y2="38" stroke="#5a3e10" stroke-width="2"/><line x1="36" y1="44" x2="33" y2="32" stroke="#5a3e10" stroke-width="2"/><line x1="46" y1="42" x2="46" y2="30" stroke="#5a3e10" stroke-width="2"/><ellipse cx="76" cy="68" rx="16" ry="12" fill="#d4aa70"/><ellipse cx="82" cy="62" rx="12" ry="10" fill="#d4aa70"/><circle cx="86" cy="59" r="3" fill="#111"/></svg>',
+'PRF':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="47" fill="#1a1a2e" stroke="#4a4aaa" stroke-width="2.5"/><path d="M50 55 C40 45 22 38 8 42 C16 44 22 50 26 58 C32 52 40 50 50 55Z" fill="#7c6adc"/><path d="M50 55 C60 45 78 38 92 42 C84 44 78 50 74 58 C68 52 60 50 50 55Z" fill="#7c6adc"/><ellipse cx="50" cy="53" rx="10" ry="13" fill="#5a4aaa"/><circle cx="50" cy="42" r="9" fill="#5a4aaa"/><circle cx="46" cy="41" r="2.5" fill="#ff4444"/><circle cx="54" cy="41" r="2.5" fill="#ff4444"/><rect x="32" y="72" width="36" height="16" rx="4" fill="#7c6adc"/><text x="50" y="84" text-anchor="middle" font-size="10" font-weight="bold" fill="white" font-family="Arial">PRF</text></svg>',
+'Deer':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><ellipse cx="50" cy="68" rx="24" ry="16" fill="#b8865a"/><ellipse cx="72" cy="60" rx="14" ry="12" fill="#b8865a"/><path d="M66 50 L62 36 L68 42 L66 50Z" fill="#9a6e42"/><path d="M72 49 L76 35 L78 42 L72 49Z" fill="#9a6e42"/><circle cx="79" cy="57" r="3" fill="#111"/></svg>',
+'Fox':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><ellipse cx="48" cy="65" rx="28" ry="18" fill="#d4622a"/><ellipse cx="72" cy="58" rx="16" ry="13" fill="#d4622a"/><path d="M60 48 L56 32 L66 44Z" fill="#d4622a"/><path d="M76 48 L82 32 L72 44Z" fill="#d4622a"/><ellipse cx="72" cy="62" rx="8" ry="6" fill="#f5dcc8"/><circle cx="67" cy="56" r="3.5" fill="#111"/></svg>',
+'Squirrel':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><ellipse cx="46" cy="66" rx="20" ry="15" fill="#c4722a"/><ellipse cx="66" cy="56" rx="14" ry="12" fill="#c4722a"/><path d="M56 46 L52 30 L62 42Z" fill="#c4722a"/><path d="M28 70 Q14 58 18 44 Q22 50 28 52 Q26 60 28 70Z" fill="#c4722a"/><circle cx="71" cy="53" r="3" fill="#111"/></svg>',
+'Water Body':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><ellipse cx="50" cy="58" rx="38" ry="26" fill="#1e6ab4"/><path d="M20 52 Q35 46 50 52 Q65 58 80 52" fill="none" stroke="#5aa8e0" stroke-width="2" opacity="0.7"/></svg>',
+'Veteran Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="44" y="52" width="12" height="40" rx="4" fill="#6B4423"/><path d="M50 10 C30 10 15 28 15 44 C15 62 30 72 50 70 C70 72 85 62 85 44 C85 28 70 10 50 10Z" fill="#2d7a2d"/></svg>',
+'Bat Box':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="28" y="22" width="44" height="60" rx="4" fill="#8B6340"/><rect x="28" y="22" width="44" height="14" rx="4" fill="#6B4320"/><path d="M50 52 C42 46 32 44 24 46 C30 48 36 52 40 56 C44 52 46 50 50 52Z" fill="#333"/><path d="M50 52 C58 46 68 44 76 46 C70 48 64 52 60 56 C56 52 54 50 50 52Z" fill="#333"/><circle cx="47" cy="47" r="2" fill="#ff4444"/><circle cx="53" cy="47" r="2" fill="#ff4444"/></svg>',
+'Bird Box':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="22" y="28" width="56" height="56" rx="4" fill="#8B6340"/><path d="M22 28 L50 8 L78 28Z" fill="#6B4320"/><circle cx="50" cy="50" r="10" fill="#1a0e08"/></svg>',
+'Static Bat Detector':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="#0d2b4a" stroke="#2288cc" stroke-width="3"/><rect x="34" y="38" width="32" height="24" rx="3" fill="#1a5f8a" stroke="#55aadd" stroke-width="2"/><polyline points="39,47 41,44 43,50 45,43 47,50 49,44 51,47" fill="none" stroke="#00ff88" stroke-width="1.2" stroke-linecap="round"/><line x1="50" y1="62" x2="42" y2="78" stroke="#55aadd" stroke-width="2" stroke-linecap="round"/><line x1="50" y1="62" x2="58" y2="78" stroke="#55aadd" stroke-width="2" stroke-linecap="round"/></svg>',
+'Small Urban Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="46" y="62" width="8" height="28" rx="3" fill="#6B4423"/><circle cx="50" cy="48" r="22" fill="#2d7a2d"/><circle cx="38" cy="42" r="12" fill="#388e3c"/><circle cx="62" cy="44" r="10" fill="#1b5e20"/></svg>',
+'Medium Urban Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="45" y="58" width="10" height="32" rx="3" fill="#6B4423"/><circle cx="50" cy="42" r="28" fill="#2d7a2d"/><circle cx="34" cy="36" r="16" fill="#388e3c"/><circle cx="66" cy="38" r="14" fill="#1b5e20"/><circle cx="50" cy="28" r="12" fill="#43a047"/></svg>',
+'Large Urban Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="44" y="55" width="12" height="36" rx="4" fill="#5d3a1a"/><circle cx="50" cy="36" r="34" fill="#2d7a2d"/><circle cx="30" cy="30" r="20" fill="#388e3c"/><circle cx="68" cy="32" r="18" fill="#1b5e20"/><circle cx="50" cy="20" r="16" fill="#43a047"/><circle cx="38" cy="48" r="10" fill="#2e7d32"/></svg>',
+'Small Rural Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="46" y="62" width="8" height="28" rx="3" fill="#5d3a1a"/><circle cx="50" cy="48" r="22" fill="#1b5e20"/><circle cx="38" cy="42" r="12" fill="#2e7d32"/><circle cx="62" cy="44" r="10" fill="#388e3c"/></svg>',
+'Medium Rural Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="45" y="58" width="10" height="32" rx="3" fill="#5d3a1a"/><circle cx="50" cy="42" r="28" fill="#1b5e20"/><circle cx="34" cy="36" r="16" fill="#2e7d32"/><circle cx="66" cy="38" r="14" fill="#388e3c"/><circle cx="50" cy="28" r="12" fill="#43a047"/></svg>',
+'Large Rural Tree':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="44" y="55" width="12" height="36" rx="4" fill="#4e342e"/><circle cx="50" cy="36" r="34" fill="#1b5e20"/><circle cx="30" cy="30" r="20" fill="#2e7d32"/><circle cx="68" cy="32" r="18" fill="#388e3c"/><circle cx="50" cy="20" r="16" fill="#43a047"/><circle cx="38" cy="48" r="10" fill="#1b5e20"/></svg>',
+};
+const EM={'Bird Nest (Active)':'🪺','Bird Nest (Inactive)':'🪹','Bird Pellets':'🦉','Amphibian Eggs':'🐸','Stag Beetle':'🪲','Badger Latrine':'🟤','Badger Sett':'🕳','Fox Droppings':'🟫','Deer Droppings':'💩','Otter Holt':'🦦','Water Vole Burrow':'🐭','Rabbit Burrow':'🐇','Kingfisher Bank':'🐦','Tree Stump':'🪵','Dead Wood':'🌿','Brash Pile':'🍃','Herptile Refuge':'🦎','Reptile Hibernaculum':'🐍','Green Roof':'🌱','GCN Pond':'🐸','Log Pile':'🪵','Swift Brick':'🧱','Swift Box':'🐦','Barn Owl Box':'🦉','House Martin Cup':'🐦','Bee Brick':'🐝','Bee Bank':'🌼','Insect Box':'🐛','Stag Beetle Loggery':'🪵','Wildlife Gap':'🔲','Hedgehog House':'🏠','Hedgehog Gap':'🦔','Dormouse Box':'🐹','Badger Gate':'🚪','Observer Station':'🔭','Building':'🏗','Roost Entry / Exit Point':'🦇','Target Note':'🎯'};
+function gi(n){return SV[n]?SV[n]:`<span>${EM[n]||'📍'}</span>`}
+
+// ── State ─────────────────────────────────────────────────────────────────
+let map,sL,satL,gm,mk=[],rec=[],sf=null,pm='gps',pend=null,cg='species',pendingPhoto=null;
+
+// ── Init ──────────────────────────────────────────────────────────────────
+window.addEventListener('load',()=>{
+  map=L.map('map',{center:[51.88,-1.08],zoom:13,zoomControl:false,attributionControl:false});
+  sL=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+  satL=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+  sL.addTo(map);
+  gm=L.marker([51.88,-1.08],{icon:L.divIcon({html:'<div class="gd"></div>',className:'',iconSize:[13,13],iconAnchor:[6,6]})}).addTo(map);
+  bgt();bfl();
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      p=>{
+        gm.setLatLng([p.coords.latitude,p.coords.longitude]);
+        map.flyTo([p.coords.latitude,p.coords.longitude],15,{duration:1.2});
+        navigator.geolocation.watchPosition(
+          q=>gm.setLatLng([q.coords.latitude,q.coords.longitude]),
+          ()=>{},
+          {enableHighAccuracy:true,maximumAge:5000,timeout:10000}
+        );
+      },
+      e=>{
+        const reasons={1:'Location permission denied — check Settings > Safari > Location',2:'Location unavailable',3:'GPS timed out'};
+        toast('info', reasons[e.code]||'GPS unavailable');
+      },
+      {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+    );
+  } else {
+    toast('info','GPS not supported on this device');
+  }
+});
+
+// ── Map controls ──────────────────────────────────────────────────────────
+function setBM(m){
+  if(m==='sat'){map.removeLayer(sL);satL.addTo(map);document.getElementById('bms').classList.remove('on');document.getElementById('bmsat').classList.add('on');}
+  else{map.removeLayer(satL);sL.addTo(map);document.getElementById('bmsat').classList.remove('on');document.getElementById('bms').classList.add('on');}
+}
+function panGPS(){
+  const b=document.getElementById('gpsbtn');b.classList.add('on');setTimeout(()=>b.classList.remove('on'),800);
+  if(gm)map.flyTo(gm.getLatLng(),16,{duration:.8});
+}
+function showMap(){
+  document.getElementById('tbm').classList.add('on');
+  document.getElementById('tbr').classList.remove('on');
+  document.getElementById('rpanel').classList.remove('open');
+  document.getElementById('strip').style.display='flex';
+}
+
+// ── Photo capture ─────────────────────────────────────────────────────────
+function onPhotoChosen(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const ts=Date.now(); // milliseconds — always unique
+  const ext=file.name.split('.').pop().toLowerCase()||'jpg';
+  const filename='roavr_'+ts+'.'+ext;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    pendingPhoto={dataUrl:ev.target.result,filename,mimeType:file.type||'image/jpeg'};
+    const img=document.getElementById('photo-preview');
+    if(img){img.src=ev.target.result;img.style.display='block';}
+    const btn=document.getElementById('cam-btn');
+    if(btn){btn.classList.add('taken');btn.innerHTML='✓ Photo added';}
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function resetPhoto(){
+  pendingPhoto=null;
+  const img=document.getElementById('photo-preview');if(img){img.src='';img.style.display='none';}
+  const btn=document.getElementById('cam-btn');if(btn){btn.classList.remove('taken');btn.innerHTML='📷 Add Photo';}
+}
+
+// ── Feature picker ────────────────────────────────────────────────────────
+function openPicker(mode){
+  pm=mode;sf=null;pendingPhoto=null;resetPhoto();
+  document.getElementById('note').value='';
+  const btn=document.getElementById('cbtn');btn.disabled=true;btn.textContent='Select a feature above';
+  const b=document.getElementById('pbadge');
+  b.className='pbadge '+(mode==='gps'?'pg':'pm');
+  b.textContent=mode==='gps'?'📍 Placing at GPS location':'🗺 Tap map after selecting';
+  cg='species';bgt();bfl();
+  document.getElementById('ppanel').classList.add('open');
+}
+function closeP(){document.getElementById('ppanel').classList.remove('open');}
+function bgt(){
+  const c=document.getElementById('gtabs');c.innerHTML='';
+  GS.forEach(g=>{const d=document.createElement('div');d.className='gtab'+(g.id===cg?' on':'');d.textContent=g.label;d.onclick=()=>{cg=g.id;bgt();bfl();};c.appendChild(d);});
+}
+function bfl(){
+  const g=GS.find(x=>x.id===cg);const c=document.getElementById('fscroll');c.innerHTML='';const seen=new Set();
+  g.groups.forEach(sub=>{
+    const s=document.createElement('div');s.className='fsec';s.textContent=sub.name;c.appendChild(s);
+    sub.items.forEach(n=>{
+      if(seen.has(n))return;seen.add(n);
+      const r=document.createElement('div');r.className='frow'+(sf===n?' sel':'');
+      r.innerHTML=`<div class="fico">${gi(n)}</div><div class="flbl">${n}</div><div class="fchk">✓</div>`;
+      r.onclick=()=>{sf=n;const btn=document.getElementById('cbtn');btn.disabled=false;btn.textContent='Record: '+n;bfl();};
+      c.appendChild(r);
+    });
+  });
+}
+function confirm2(){
+  if(!sf)return;
+  const note=document.getElementById('note').value.trim();
+  const photo=pendingPhoto;
+  if(pm==='map'){
+    pend={name:sf,note,photo};closeP();
+    document.getElementById('tapov').classList.add('on');
+    document.getElementById('confirmbar').classList.add('on');
+    toast('info','Pan to location then tap Place Here');
+  } else {
+    const ll=gm?gm.getLatLng():{lat:51.88,lng:-1.08};
+    addR(sf,note,ll.lat,ll.lng,photo);
+    resetPhoto();
+    closeP();
+  }
+}
+function confirmTap(){
+  if(!pend)return;
+  const c=map.getCenter();
+  addR(pend.name,pend.note,c.lat,c.lng,pend.photo);
+  document.getElementById('tapov').classList.remove('on');
+  document.getElementById('confirmbar').classList.remove('on');
+  resetPhoto();pend=null;
+}
+function cancelTap(){
+  document.getElementById('tapov').classList.remove('on');
+  document.getElementById('confirmbar').classList.remove('on');
+  resetPhoto();pend=null;toast('info','Cancelled');
+}
+
+// ── Add record ────────────────────────────────────────────────────────────
+function addR(n,note,lat,lng,photo){
+  const id=Date.now();
+  rec.push({id,n,note,lat,lng,photo:photo||null,ts:new Date().toISOString()});
+  const thumbHtml=photo?`<img src="${photo.dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:'';
+  const iconHtml=photo?`<div style="width:34px;height:34px;border-radius:50%;overflow:hidden;border:2.5px solid #22c55e;box-shadow:0 2px 8px rgba(0,0,0,.5)">${thumbHtml}</div>`:`<div class="epin pp">${gi(n)}</div>`;
+  const pin=L.divIcon({html:iconHtml,className:'',iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-20]});
+  const m=L.marker([lat,lng],{icon:pin}).addTo(map);
+  const popupContent=`<b>${n}</b>${note?'<br><i>'+note+'</i>':''}`+(photo?`<br><img src="${photo.dataUrl}" style="width:140px;height:100px;object-fit:cover;border-radius:6px;margin-top:6px"/>`:'');
+  m.bindPopup(popupContent);
+  mk.push({id,m});
+  map.flyTo([lat,lng],Math.max(map.getZoom(),16),{duration:.6});
+  document.getElementById('cnt').textContent=rec.length;
+  toast('ok','Recorded: '+n);
+}
+
+// ── Records panel ─────────────────────────────────────────────────────────
+function openRec(){
+  renderR();
+  document.getElementById('rpanel').classList.add('open');
+  document.getElementById('tbr').classList.add('on');
+  document.getElementById('tbm').classList.remove('on');
+  document.getElementById('strip').style.display='none';
+}
+function closeR(){document.getElementById('rpanel').classList.remove('open');showMap();}
+function renderR(){
+  const n=rec.length;
+  document.getElementById('rsub').textContent=n?`${n} feature${n!==1?'s':''} · ${new Date().toLocaleDateString('en-GB')}`:'Nothing recorded yet';
+  const gd={};GS.forEach(g=>{gd[g.label]=0;});
+  rec.forEach(r=>{const g=GS.find(g=>g.groups.some(s=>s.items.includes(r.n)));if(g)gd[g.label]=(gd[g.label]||0)+1;});
+  const act=Object.entries(gd).filter(([,v])=>v>0);
+  const ss=document.getElementById('sstrip');ss.innerHTML='';
+  const tb=document.createElement('div');tb.className='sbox';tb.innerHTML=`<div class="snum">${n}</div><div class="slbl">Total</div>`;ss.appendChild(tb);
+  act.forEach(([l,c])=>{const b=document.createElement('div');b.className='sbox';b.innerHTML=`<div class="snum">${c}</div><div class="slbl">${l.split(' ').slice(1).join(' ')}</div>`;ss.appendChild(b);});
+  const body=document.getElementById('rbody');body.innerHTML='';
+  document.getElementById('ebtn').disabled=!n;
+  if(!n){body.innerHTML='<div class="empty"><div class="empi">🌿</div><div class="empt">Start recording features on the map</div></div>';return;}
+  const cols=['#a78bfa','#fb923c','#34d399','#818cf8','#f472b6','#94a3b8'];
+  if(act.length){
+    const sh=document.createElement('div');sh.className='rsec';sh.textContent='by category';body.appendChild(sh);
+    const mx=Math.max(...act.map(([,v])=>v));
+    act.forEach(([l,c],i)=>{
+      const r=document.createElement('div');r.className='grow';const p=mx>0?Math.round(c/mx*100):0;
+      r.innerHTML=`<div class="gdot" style="background:${cols[i%cols.length]}"></div><div class="gname">${l}</div><div class="gbar"><div class="gfill" style="width:${p}%;background:${cols[i%cols.length]}"></div></div><div class="gcnt">${c}</div>`;
+      body.appendChild(r);
+    });
+  }
+  const sh2=document.createElement('div');sh2.className='rsec';sh2.textContent='all features';body.appendChild(sh2);
+  [...rec].reverse().forEach(r=>{
+    const item=document.createElement('div');item.className='ritem';
+    const t=new Date(r.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    const co=`${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`;
+    const thumb=r.photo?`<img src="${r.photo.dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:9px"/>`:gi(r.n);
+    item.innerHTML=`<div class="rico">${thumb}</div><div class="rinfo"><div class="rname">${r.n}</div><div class="rmeta">${t} · ${co}</div>${r.note?`<div class="rnote">${r.note}</div>`:''}</div><div class="dbtn" onclick="delR(${r.id})">✕</div>`;
+    body.appendChild(item);
+  });
+}
+function delR(id){
+  rec=rec.filter(r=>r.id!==id);
+  const m=mk.find(x=>x.id===id);if(m){map.removeLayer(m.m);mk=mk.filter(x=>x.id!==id);}
+  document.getElementById('cnt').textContent=rec.length;
+  renderR();toast('info','Removed');
+}
+
+// ── Export — GeoJSON + individual photo files ─────────────────────────────
+function doExport(){
+  if(!rec.length){toast('info','No features to export');return;}
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const datePart = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}`;
+  const folderName = `${datePart} ${timePart} Eco Survey`;
+
+  // Build GeoJSON with photo filenames
+  const gj={
+    type:'FeatureCollection',name:'roavr_field_survey',
+    crs:{type:'name',properties:{name:'urn:ogc:def:crs:OGC:1.3:CRS84'}},
+    features:rec.map(r=>({
+      type:'Feature',
+      properties:{feature_type:r.n,label:r.note||null,timestamp:r.ts,
+                  source:'roavr_field_mapper',photo:r.photo?r.photo.filename:null},
+      geometry:{type:'Point',coordinates:[r.lng,r.lat]}
+    }))
+  };
+
+  const zip=new JSZip();
+  const folder=zip.folder(folderName);
+  folder.file(`${folderName}.geojson`, JSON.stringify(gj,null,2));
+
+  // Add each photo
+  rec.filter(r=>r.photo).forEach(r=>{
+    const base64=r.photo.dataUrl.split(',')[1];
+    folder.file(r.photo.filename, base64, {base64:true});
+  });
+
+  const photoCount=rec.filter(r=>r.photo).length;
+  toast('info','Building zip…');
+
+  zip.generateAsync({type:'blob'}).then(blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${folderName}.zip`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('ok', photoCount
+      ? `Exported zip: GeoJSON + ${photoCount} photo${photoCount!==1?'s':''}`
+      : 'Exported zip: GeoJSON');
+  });
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function toast(type,msg){
+  const el=document.getElementById('toast');document.getElementById('tmsg').textContent=msg;
+  el.querySelector('.ti').textContent=type==='ok'?'●':'○';el.className=`toast ${type} show`;
+  clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2600);
+}
+</script>
+</body>
+</html>
